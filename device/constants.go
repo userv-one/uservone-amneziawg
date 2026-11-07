@@ -38,4 +38,6 @@ const (
 const (
 	UnderLoadAfterTime = time.Second // how long does the device remain under load after detected
 	MaxPeers           = 1 << 16     // maximum number of configured peers
+	MaxJunkPackets     = 128         // limit handshake-triggered allocations and amplification
+	MaxJunkPacketSize  = 65507       // largest possible UDP payload
 )

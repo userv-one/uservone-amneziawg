@@ -14,10 +14,10 @@ import (
 	"runtime"
 	"strconv"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
-	"github.com/amnezia-vpn/amneziawg-go/v3/device"
-	"github.com/amnezia-vpn/amneziawg-go/v3/ipc"
-	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+	"github.com/userv-one/uservone-amneziawg/v3/conn"
+	"github.com/userv-one/uservone-amneziawg/v3/device"
+	"github.com/userv-one/uservone-amneziawg/v3/ipc"
+	"github.com/userv-one/uservone-amneziawg/v3/tun"
 	"golang.org/x/sys/unix"
 )
 
@@ -59,7 +59,7 @@ func warning() {
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {
-		fmt.Printf("amneziawg-go %s\n\nUserspace AmneziaWG daemon for %s-%s.\nInformation available at https://amnezia.org\n", Version, runtime.GOOS, runtime.GOARCH)
+		fmt.Printf("uservone-amneziawg %s\n\nUserspace AmneziaWG daemon for %s-%s.\nInformation available at https://userv.one\n", Version, runtime.GOOS, runtime.GOARCH)
 		return
 	}
 
@@ -145,7 +145,7 @@ func main() {
 		fmt.Sprintf("(%s) ", interfaceName),
 	)
 
-	logger.Verbosef("Starting amneziawg-go version %s", Version)
+	logger.Verbosef("Starting uservone-amneziawg version %s", Version)
 
 	if err != nil {
 		logger.Errorf("Failed to create TUN device: %v", err)

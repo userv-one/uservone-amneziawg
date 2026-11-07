@@ -9,7 +9,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
+	"github.com/userv-one/uservone-amneziawg/v3/conn"
 	"golang.org/x/sys/unix"
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/header"

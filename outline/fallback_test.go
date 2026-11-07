@@ -3,7 +3,7 @@ package outline_test
 import (
 	"testing"
 
-	awg "github.com/amnezia-vpn/amneziawg-go/v3/outline"
+	awg "github.com/userv-one/uservone-amneziawg/v3/outline"
 	"golang.getoutline.org/sdk/x/mobileproxy"
 )
 

@@ -18,6 +18,10 @@ func newBytesObf(val string) (obf, error) {
 		return nil, errors.New("odd amount of symbols")
 	}
 
+	if len(val)/2 > maxObfPacketSize {
+		return nil, errors.New("static byte sequence is too large")
+	}
+
 	bytes, err := hex.DecodeString(val)
 	if err != nil {
 		return nil, err
@@ -35,7 +39,7 @@ func (o *bytesObf) Obfuscate(dst, src []byte) {
 }
 
 func (o *bytesObf) Deobfuscate(dst, src []byte) bool {
-	return bytes.Equal(o.data, src[:o.ObfuscatedLen(0)])
+	return len(src) == len(o.data) && bytes.Equal(o.data, src)
 }
 
 func (o *bytesObf) ObfuscatedLen(srcLen int) int {

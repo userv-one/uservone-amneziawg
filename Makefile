@@ -1,31 +1,29 @@
-PREFIX ?= /usr
+PREFIX ?= /usr/local
 DESTDIR ?=
 BINDIR ?= $(PREFIX)/bin
 export GO111MODULE := on
 
-all: generate-version-and-build
+DAEMON := uservone-amneziawg
+CLI := uservone-awg
 
-MAKEFLAGS += --no-print-directory
+all: $(DAEMON) $(CLI)
 
-generate-version-and-build:
-	@export GIT_CEILING_DIRECTORIES="$(realpath $(CURDIR)/..)" && \
-	tag="$$(git describe --tags --dirty 2>/dev/null)" && \
-	ver="$$(printf 'package main\n\nconst Version = "%s"\n' "$$tag")" && \
-	[ "$$(cat version.go 2>/dev/null)" != "$$ver" ] && \
-	echo "$$ver" > version.go && \
-	git update-index --assume-unchanged version.go || true
-	@$(MAKE) amneziawg-go
+$(DAEMON): $(wildcard *.go) $(wildcard */*.go)
+	go build -trimpath -o "$@" .
 
-amneziawg-go: $(wildcard *.go) $(wildcard */*.go)
-	go build -v -o "$@"
+$(CLI): $(wildcard cmd/uservone-awg/*.go) $(wildcard profile/*.go)
+	go build -trimpath -o "$@" ./cmd/uservone-awg
 
-install: amneziawg-go
-	@install -v -d "$(DESTDIR)$(BINDIR)" && install -v -m 0755 "$<" "$(DESTDIR)$(BINDIR)/amneziawg-go"
+install: all
+	install -v -d "$(DESTDIR)$(BINDIR)"
+	install -v -m 0755 "$(DAEMON)" "$(DESTDIR)$(BINDIR)/$(DAEMON)"
+	install -v -m 0755 "$(CLI)" "$(DESTDIR)$(BINDIR)/$(CLI)"
+	ln -sf "$(DAEMON)" "$(DESTDIR)$(BINDIR)/amneziawg-go"
 
 test:
 	go test ./...
 
 clean:
-	rm -f amneziawg-go
+	rm -f "$(DAEMON)" "$(CLI)" "$(DAEMON).exe" "$(CLI).exe"
 
-.PHONY: all clean test install generate-version-and-build
+.PHONY: all clean test install

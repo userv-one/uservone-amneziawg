@@ -16,8 +16,8 @@ func (o *dataStringObf) Obfuscate(dst, src []byte) {
 }
 
 func (o *dataStringObf) Deobfuscate(dst, src []byte) bool {
-	base64.RawStdEncoding.Decode(dst, src)
-	return true
+	n, err := base64.RawStdEncoding.Decode(dst, src)
+	return err == nil && n == len(dst)
 }
 
 func (o *dataStringObf) ObfuscatedLen(n int) int {

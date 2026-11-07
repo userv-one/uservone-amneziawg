@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/ipc"
+	"github.com/userv-one/uservone-amneziawg/v3/ipc"
 )
 
 type IPCError struct {
@@ -359,7 +359,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 		}
 
 		device.log.Verbosef("UAPI: Updating junk count")
-		device.junk.count.Store(uint32(jc))
+		ipcDev.junk.count = uint32(jc)
 
 	case "jmin":
 		jmin, err := strconv.ParseUint(value, 10, 32)
@@ -368,7 +368,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 		}
 
 		device.log.Verbosef("UAPI: Updating junk min")
-		device.junk.min.Store(uint32(jmin))
+		ipcDev.junk.min = uint32(jmin)
 
 	case "jmax":
 		jmax, err := strconv.ParseUint(value, 10, 32)
@@ -377,7 +377,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 		}
 
 		device.log.Verbosef("UAPI: Updating junk max")
-		device.junk.max.Store(uint32(jmax))
+		ipcDev.junk.max = uint32(jmax)
 
 	case "s1":
 		padding, err := strconv.ParseUint(value, 10, 16)
@@ -789,6 +789,11 @@ func (device *Device) IpcHandle(socket net.Conn) {
 }
 
 type ipcSetDevice struct {
+	junk struct {
+		min   uint32
+		max   uint32
+		count uint32
+	}
 	headers struct {
 		init      UintRange
 		response  UintRange
@@ -808,6 +813,10 @@ func (d *ipcSetDevice) fromDevice(device *Device) {
 	device.headerProtection.RLock()
 	defer device.headerProtection.RUnlock()
 
+	d.junk.min = device.junk.min.Load()
+	d.junk.max = device.junk.max.Load()
+	d.junk.count = device.junk.count.Load()
+
 	d.headers.init = device.headers.init.Load()
 	d.headers.response = device.headers.response.Load()
 	d.headers.cookie = device.headers.cookie.Load()
@@ -822,20 +831,16 @@ func (d *ipcSetDevice) fromDevice(device *Device) {
 }
 
 func (d *ipcSetDevice) mergeWithDevice(device *Device) error {
+	if err := d.validate(); err != nil {
+		return err
+	}
+
 	device.headerProtection.Lock()
 	defer device.headerProtection.Unlock()
 
-	headers := []UintRange{d.headers.init, d.headers.response, d.headers.cookie, d.headers.transport}
-	for i := 0; i < len(headers); i++ {
-		for j := i + 1; j < len(headers); j++ {
-			left := headers[i]
-			right := headers[j]
-
-			if left.Overlap(right) {
-				return errors.New("headers must not overlap")
-			}
-		}
-	}
+	device.junk.min.Store(d.junk.min)
+	device.junk.max.Store(d.junk.max)
+	device.junk.count.Store(d.junk.count)
 
 	device.log.Verbosef("UAPI: Updating h1 padding")
 	device.headers.init.Store(d.headers.init)
@@ -848,15 +853,6 @@ func (d *ipcSetDevice) mergeWithDevice(device *Device) error {
 
 	device.log.Verbosef("UAPI: Updating h4 padding")
 	device.headers.transport.Store(d.headers.transport)
-
-	if !d.headerProtectionKey.IsZero() {
-		paddings := []uint32{d.paddings.init, d.paddings.response, d.paddings.cookie, d.paddings.transport}
-		for i, padding := range paddings {
-			if padding < HeaderCipherNonceSize {
-				return fmt.Errorf("S%d must be more then %d to use headerProtection", i, HeaderCipherNonceSize)
-			}
-		}
-	}
 
 	device.log.Verbosef("UAPI: Updating s1 padding")
 	device.paddings.init.Store(d.paddings.init)

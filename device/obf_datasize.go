@@ -1,9 +1,7 @@
 package device
 
-import "strconv"
-
 func newDataSizeObf(val string) (obf, error) {
-	length, err := strconv.Atoi(val)
+	length, err := parseObfLength(val, 1, 8)
 	if err != nil {
 		return nil, err
 	}

@@ -1,3 +1,5 @@
 package main
 
-const Version = "0.0.20250522"
+import "github.com/userv-one/uservone-amneziawg/v3/buildinfo"
+
+const Version = buildinfo.Version

@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
+	"github.com/userv-one/uservone-amneziawg/v3/conn"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"

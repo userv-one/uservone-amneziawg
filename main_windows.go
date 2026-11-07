@@ -12,11 +12,11 @@ import (
 
 	"golang.org/x/sys/windows"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
-	"github.com/amnezia-vpn/amneziawg-go/v3/device"
-	"github.com/amnezia-vpn/amneziawg-go/v3/ipc"
+	"github.com/userv-one/uservone-amneziawg/v3/conn"
+	"github.com/userv-one/uservone-amneziawg/v3/device"
+	"github.com/userv-one/uservone-amneziawg/v3/ipc"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+	"github.com/userv-one/uservone-amneziawg/v3/tun"
 )
 
 const (
@@ -36,7 +36,7 @@ func main() {
 		device.LogLevelVerbose,
 		fmt.Sprintf("(%s) ", interfaceName),
 	)
-	logger.Verbosef("Starting amneziawg-go version %s", Version)
+	logger.Verbosef("Starting uservone-amneziawg version %s", Version)
 
 	tun, err := tun.CreateTUN(interfaceName, 0)
 	if err == nil {

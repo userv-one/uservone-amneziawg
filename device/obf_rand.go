@@ -1,12 +1,9 @@
 package device
 
-import (
-	"crypto/rand"
-	"strconv"
-)
+import "crypto/rand"
 
 func newRandObf(val string) (obf, error) {
-	length, err := strconv.Atoi(val)
+	length, err := parseObfLength(val, 1, maxObfPacketSize)
 	if err != nil {
 		return nil, err
 	}

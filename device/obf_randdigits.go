@@ -2,14 +2,13 @@ package device
 
 import (
 	"crypto/rand"
-	"strconv"
 	"unicode"
 )
 
 const digits10 = "0123456789"
 
 func newRandDigitsObf(val string) (obf, error) {
-	length, err := strconv.Atoi(val)
+	length, err := parseObfLength(val, 1, maxObfPacketSize)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +30,10 @@ func (o *randDigitObf) Obfuscate(dst, src []byte) {
 }
 
 func (o *randDigitObf) Deobfuscate(dst, src []byte) bool {
-	for _, b := range src[:o.length] {
+	if len(src) != o.length {
+		return false
+	}
+	for _, b := range src {
 		if !unicode.IsDigit(rune(b)) {
 			return false
 		}

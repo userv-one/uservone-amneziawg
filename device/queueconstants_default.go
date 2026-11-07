@@ -7,7 +7,7 @@
 
 package device
 
-import "github.com/amnezia-vpn/amneziawg-go/v3/conn"
+import "github.com/userv-one/uservone-amneziawg/v3/conn"
 
 const (
 	QueueStagedSize            = conn.IdealBatchSize

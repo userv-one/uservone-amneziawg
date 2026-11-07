@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/conn"
-	"github.com/amnezia-vpn/amneziawg-go/v3/tun"
+	"github.com/userv-one/uservone-amneziawg/v3/conn"
+	"github.com/userv-one/uservone-amneziawg/v3/tun"
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
@@ -294,6 +294,14 @@ func (peer *Peer) keepKeyFreshSending() {
 	}
 }
 
+func reframeOutboundPacket(buffer []byte, size, oldOffset, newOffset int) ([]byte, bool) {
+	if size < 0 || oldOffset < 0 || newOffset < 0 || oldOffset > len(buffer)-size || newOffset > len(buffer)-size {
+		return nil, false
+	}
+	copy(buffer[newOffset:newOffset+size], buffer[oldOffset:oldOffset+size])
+	return buffer[newOffset : newOffset+size], true
+}
+
 func (device *Device) RoutineReadFromTUN() {
 	defer func() {
 		device.log.Verbosef("Routine: TUN reader - stopped")
@@ -333,14 +341,21 @@ func (device *Device) RoutineReadFromTUN() {
 
 		// read packets
 		count, readErr = device.tun.device.Read(bufs, sizes, offset)
+		currentPadding := device.paddings.transport.Load()
+		currentOffset := MessageTransportHeaderSize + int(currentPadding)
 		for i := 0; i < count; i++ {
 			if sizes[i] < 1 {
 				continue
 			}
 
 			elem := elems[i]
-			elem.packet = bufs[i][offset : offset+sizes[i]]
-			elem.padding = padding
+			packet, ok := reframeOutboundPacket(bufs[i], sizes[i], offset, currentOffset)
+			if !ok {
+				device.log.Verbosef("Dropped packet that does not fit updated transport padding")
+				continue
+			}
+			elem.packet = packet
+			elem.padding = currentPadding
 
 			// lookup peer
 			var peer *Peer

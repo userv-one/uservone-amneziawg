@@ -1,163 +1,101 @@
-# Go Implementation of AmneziaWG
+# uservone-amneziawg
 
-AmneziaWG is a contemporary version of the WireGuard protocol. It's a fork of WireGuard-Go and offers protection against detection by Deep Packet Inspection (DPI) systems. At the same time, it retains the simplified architecture and high performance of the original.
+Independent userv.one fork of the Go AmneziaWG userspace implementation. It remains wire-compatible with AmneziaWG v3 and the standard `awg` / `awg-quick` UAPI workflow.
 
-The precursor, WireGuard, is known for its efficiency but had issues with detection due to its distinctive packet signatures.
-AmneziaWG addresses this problem by employing advanced obfuscation methods, allowing its traffic to blend seamlessly with regular internet traffic.
-As a result, AmneziaWG maintains high performance while adding an extra layer of stealth, making it a superb choice for those seeking a fast and discreet VPN connection.
+Upstream reference: [`amnezia-vpn/amneziawg-go@b5928efb`](https://github.com/amnezia-vpn/amneziawg-go/commit/b5928efb6ca19f0153958460c3d141f04abc5c2e). See [PROVENANCE.md](docs/PROVENANCE.md).
 
-## Usage
+## What this fork changes
 
-Simply run:
+- Rejects malformed obfuscation tags, negative lengths, oversized packets and ambiguous payload layouts.
+- Makes obfuscation decoding bounds-safe; malformed Base64 and truncated/trailing data are rejected without panics.
+- Validates `Jc/Jmin/Jmax` and `S1-S4` before applying a UAPI update, preventing allocation amplification and packet-buffer overflows.
+- Fixes transport packets using a stale padding offset after live reconfiguration. This was reproduced as intermittent Windows ping/pong failure and is now covered by repeated integration tests.
+- Preserves fixed-size junk packets and the full `uint32` randomized-header range.
+- Adds deterministic `balanced` and `low-bandwidth` profiles with bounded padding, non-overlapping headers and cookies enabled.
+- Provides a small management CLI, cross-platform CI, race tests and obfuscation fuzzing.
 
-```
-$ amneziawg-go wg0
-```
+The complete technical list is in [IMPROVEMENTS.md](docs/IMPROVEMENTS.md).
 
-This will create an interface and fork into the background. To remove the interface, use the usual `ip link del wg0`, or if your system does not support removing interfaces directly, you may instead remove the control socket via `rm -f /var/run/amneziawg/wg0.sock`, which will result in amneziawg-go shutting down.
+## Build
 
-To run amneziawg-go without forking to the background, pass `-f` or `--foreground`:
+Go 1.25 or newer is required.
 
-```
-$ amneziawg-go -f wg0
-```
-When an interface is running, you may use [`amneziawg-tools `](https://github.com/amnezia-vpn/amneziawg-tools) to configure it, as well as the usual `ip(8)` and `ifconfig(8)` commands.
-
-To run with more logging you may set the environment variable `LOG_LEVEL=debug`.
-
-## Platforms
-
-### Linux
-
-This will run on Linux; you should run amnezia-wg instead of using default linux kernel module.
-
-### macOS
-
-This runs on macOS using the utun driver. It does not yet support sticky sockets, and won't support fwmarks because of Darwin limitations. Since the utun driver cannot have arbitrary interface names, you must either use `utun[0-9]+` for an explicit interface name or `utun` to have the kernel select one for you. If you choose `utun` as the interface name, and the environment variable `WG_TUN_NAME_FILE` is defined, then the actual name of the interface chosen by the kernel is written to the file specified by that variable.
-This runs on MacOS, you should use it from [amneziawg-apple](https://github.com/amnezia-vpn/amneziawg-apple)
-
-### Windows
-
-This runs on Windows, you should use it from [amneziawg-windows](https://github.com/amnezia-vpn/amneziawg-windows), which uses this as a module.
-
-
-## Building
-
-This requires an installation of the latest version of [Go](https://go.dev/).
-
-```
-$ git clone https://github.com/amnezia-vpn/amneziawg-go
-$ cd amneziawg-go
-$ make
+```sh
+make
+# Produces:
+#   uservone-amneziawg  - userspace daemon
+#   uservone-awg        - profile/version CLI
 ```
 
-## Configuration
+Install both binaries and the `amneziawg-go` compatibility symlink:
 
-### Data types and definitions
-
-`client-side` means the param is not required to be the same on both server and client, while  
-`server-side` means this is mandatory the values are the same on server and on client  
-
-`range,x`, where x is the underlying type of left and right
-* Format: "a-b", or "a", or "(off)"
-* Example: PersistentKeepalive = 22-30
-
-> [!NOTE]
-> If there is no value specified (for any param), AWG treats it as 0
-
-### Header protection [AWG 3+]
-
-Header protection is the mechanism of protecting low-entropy values of packets' headers. The idea is to apply fast encryption to the specific fields which WireGuard does use for authentication and its own encryption. The cipher uses `S1-S4` crypto padding as nonce for each incoming packet.
-
-```
-[Device]
-+ HeaderProtectionKey: key,string - server-side # the key to be used in header protection
+```sh
+sudo make install
 ```
 
-> [!TIP]
-> Use `awg genkey` to generate header protection key
+Docker builds also include `awg` and `awg-quick`, pinned to `amneziawg-tools@ee0f0a9a`.
 
-> [!IMPORTANT]
-> Header protection requires `S1-S4` value to be 12 at least
+## Profiles
 
-### Content padding [AWG 3+]
+Generate server-side UAPI (no junk-packet amplification on the server):
 
-```
-[Device]
-+ ContentPaddingAddition: uint32,range - client-side # the range to be used as a custom padding
+```sh
+uservone-awg profile balanced > server.awg
+sudo awg set awg0 < server.awg
 ```
 
-> [!TIP]
-> It's important to specify content padding on both sides. However, this is not strictly required and could be omitted.
+Generate the matching client-side settings:
 
-### Timings [AWG 3+]
-
-This param could be used to customize default Wireguard's timings
-
-```
-[Device]
-+ RekeyAfterTime       = "uint32,range - client-side - seconds" # time, after which client tries to handshake
-+ RekeyTimeout         = "uint32,range - client-side - seconds" # timeout, after which handshake is repeated
-+ RejectAfterTime      = "uint32,range - client-side - seconds" # time, after which client forces handshake, and declines all incoming data
-+ KeepaliveTimeout     = "uint32,range - client-side - seconds" # time from last data sending, after which keepalive is sent
-+ MaxHandshakeAttempts = "uint32,range - client-side - amount"  # maximum attempts of handshake repetition
-
-[Peer]
-M PersistentKeepalive  = "uint32,range - client-side - seconds" # interval of persistent keepalive
+```sh
+uservone-awg profile --client balanced > client.awg
+sudo awg set awg0 < client.awg
 ```
 
-### Junk packets
+Use the **same** `S1-S4`, `H1-H4` and optional header-protection key on both peers. `Jc/Jmin/Jmax` are client-side only.
 
-The amount of junk packets specified in `Jc` with a random size between `Jmin` and `Jmax` would be generated and sent prior every handshake
+Header protection is opt-in:
 
-- `Jc: int`, recommended range is 4-12
-- `Jmin: int` <= `Jmax:int`
+```sh
+uservone-awg profile --client --header-protection balanced > client.awg
+```
 
-> [!TIP]
-> Junk packets do not carry any actual data, so there is no need to specify it on both sides. General recommendation is to use it on the client side only
+Copy the resulting `header_protection_key` line to the server profile as well. Do not generate a different key on the other peer.
 
-> [!IMPORTANT]
-> If Jmax >= system MTU (not the one specified in AWG), then the system can fracture this packet into fragments, which looks suspicious from the censor side
+`low-bandwidth` reduces junk and padding overhead:
 
-### Message paddings
+```sh
+uservone-awg profile --client low-bandwidth
+```
 
-- `S1: int` - padding of handshake initial message
-- `S2: int` - padding of handshake response message
-- `S3: int` - padding of handshake cookie message
-- `S4: int` - padding of transport messages
+These profiles change obfuscation parameters, not cryptography or the AWG wire format. They do not provide immunity from DPI, endpoint blocking, active probing or traffic analysis.
 
-### Message headers
+## Daemon
 
-Every message in wireguard has `uint32` type at the beginning of the packet. This field could be controlled by specifying the params below:
+Run an interface in the foreground:
 
-- `H1: string` - header range of handshake initial message
-- `H2: string` - header range of handshake response message
-- `H3: string` - header range of handshake cookie message
-- `H4: string` - header range of transport message
+```sh
+sudo uservone-amneziawg -f awg0
+```
 
-Values could be specified as:
-- range: `x-y`, x <= y; e.g. `123-456`
-- single value `1234`
+Or use the existing userv.one service after installing `awg-quick` and `/etc/amneziawg/awg0.conf`:
 
-### Custom signature packets
+```sh
+sudo cp packaging/uservawg.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now uservawg.service
+```
 
-These packets are being send prior to every handshake, in the same way as Junk packets do. The sending order is `I1`, `I2`, `I3`, `I4`, `I5`. If there is no value specified, the packet is skipped.
+The daemon remains compatible with existing `/etc/amneziawg/*.conf` files and `uservawg-expiry.timer`; expiry policy stays outside the wire-protocol process.
 
-- `I1: string`
-- `I2: string`
-- `I3: string`
-- `I4: string`
-- `I5: string`
+## Verify
 
-Value is a sequence of tags specified below:
-- `<b 0x[seq]>` - static bytes tag. Dumps `[seq]` as-is to the packet. `[seq]` is hex-encoded sequence which represents bytes sequence (2 hex numbers per byte) and is always even-sized
-- `<r [size]>` - random bytes tag. Dumps `[size]` amount of randomly-generated bytes to the packet
-- `<rd [size]>` - random digits tag. Dumps `[size]` amount of randomly-generated bytes from `[0-9]` set to the packet
-- `<rc [size]>` - random chars tag. Dumps `[size]` amount of randomly-generated bytes from `[a-zA-Z] set to the packet
-- `<t>` - timestamp tag. Dumps 4-bytes long current system time in UNIX format
+```sh
+go test ./...
+go vet -unsafeptr=false ./... # Windows RIO uses uintptr by design
+go test -race ./...
+go test ./device -run '^$' -fuzz FuzzObfChainDeobfuscationNeverPanics -fuzztime 15s
+```
 
-> [!TIP]
-> Custom signature packets does not carry any actual data, so there is no need to specify it on both sides. General recommendation is to use it on the client side only
+## License
 
-> [!IMPORTANT]
-> If the final size of any packet exceeds system MTU, it would be fractured into fragments, which looks suspicious
+MIT, matching upstream. WireGuard and AmneziaWG retain their respective copyright and project identities.

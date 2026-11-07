@@ -1,0 +1,16 @@
+[Unit]
+Description=userv.one AmneziaWG interface
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+UMask=0077
+ExecStart=/usr/local/bin/awg-quick up /etc/amneziawg/awg0.conf
+ExecStop=/usr/local/bin/awg-quick down /etc/amneziawg/awg0.conf
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=multi-user.target

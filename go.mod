@@ -1,4 +1,4 @@
-module github.com/amnezia-vpn/amneziawg-go/v3
+module github.com/userv-one/uservone-amneziawg/v3
 
 go 1.25.0
 

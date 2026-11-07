@@ -17,7 +17,7 @@ import (
 	"golang.org/x/crypto/chacha20poly1305"
 	"golang.org/x/crypto/poly1305"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/tai64n"
+	"github.com/userv-one/uservone-amneziawg/v3/tai64n"
 )
 
 type handshakeState int
@@ -636,7 +636,11 @@ func (device *Device) JunkPackets() [][]byte {
 	max := device.junk.max.Load()
 
 	for range device.junk.count.Load() {
-		buf := make([]byte, min+fastrandn(max-min))
+		size := min
+		if max > min {
+			size += fastrandn(max - min + 1)
+		}
+		buf := make([]byte, size)
 		rand.Read(buf)
 		bufs = append(bufs, buf)
 	}

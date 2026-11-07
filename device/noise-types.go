@@ -6,7 +6,9 @@
 package device
 
 import (
+	cryptorand "crypto/rand"
 	"crypto/subtle"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -141,6 +143,11 @@ func (r UintRange) IsZero() bool {
 
 func (r UintRange) PickOne() uint32 {
 	lo, hi := uint32(r), uint32(r>>32)
+	if lo == 0 && hi == ^uint32(0) {
+		var random [4]byte
+		_, _ = cryptorand.Read(random[:])
+		return binary.LittleEndian.Uint32(random[:])
+	}
 	return lo + fastrandn(hi-lo+1)
 }
 

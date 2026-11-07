@@ -8,7 +8,7 @@ package ipc
 import (
 	"net"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/ipc/namedpipe"
+	"github.com/userv-one/uservone-amneziawg/v3/ipc/namedpipe"
 	"golang.org/x/sys/windows"
 )
 

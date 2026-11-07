@@ -1,1 +1,6 @@
-amneziawg-go
+/amneziawg-go
+/uservone-amneziawg
+/uservone-awg
+*.exe
+/dist/
+/coverage.out

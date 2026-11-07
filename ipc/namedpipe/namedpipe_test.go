@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amnezia-vpn/amneziawg-go/v3/ipc/namedpipe"
+	"github.com/userv-one/uservone-amneziawg/v3/ipc/namedpipe"
 	"golang.org/x/sys/windows"
 )
 
@@ -46,21 +46,25 @@ func TestPingPong(t *testing.T) {
 	go func() {
 		incoming, err := listener.Accept()
 		if err != nil {
-			t.Fatalf("unable to accept pipe connection: %v", err)
+			t.Errorf("unable to accept pipe connection: %v", err)
+			return
 		}
 		defer incoming.Close()
 		var data [1]byte
 		_, err = incoming.Read(data[:])
 		if err != nil {
-			t.Fatalf("unable to read ping from pipe: %v", err)
+			t.Errorf("unable to read ping from pipe: %v", err)
+			return
 		}
 		if data[0] != ping {
-			t.Fatalf("expected ping, got %d", data[0])
+			t.Errorf("expected ping, got %d", data[0])
+			return
 		}
 		data[0] = pong
 		_, err = incoming.Write(data[:])
 		if err != nil {
-			t.Fatalf("unable to write pong to pipe: %v", err)
+			t.Errorf("unable to write pong to pipe: %v", err)
+			return
 		}
 	}()
 	client, err := namedpipe.DialTimeout(pipePath, time.Duration(0))
@@ -115,7 +119,8 @@ func TestDialContextListenerTimesOut(t *testing.T) {
 	}
 	defer l.Close()
 	d := 10 * time.Millisecond
-	ctx, _ := context.WithTimeout(context.Background(), d)
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
 	pipe, err := namedpipe.DialContext(ctx, pipePath)
 	if err == nil {
 		pipe.Close()
@@ -404,13 +409,14 @@ func TestTimeoutPendingRead(t *testing.T) {
 	serverDone := make(chan struct{})
 
 	go func() {
+		defer close(serverDone)
 		s, err := l.Accept()
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		time.Sleep(1 * time.Second)
 		s.Close()
-		close(serverDone)
 	}()
 
 	client, err := namedpipe.DialTimeout(pipePath, time.Duration(0))
@@ -452,13 +458,14 @@ func TestTimeoutPendingWrite(t *testing.T) {
 	serverDone := make(chan struct{})
 
 	go func() {
+		defer close(serverDone)
 		s, err := l.Accept()
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		time.Sleep(1 * time.Second)
 		s.Close()
-		close(serverDone)
 	}()
 
 	client, err := namedpipe.DialTimeout(pipePath, time.Duration(0))
@@ -507,20 +514,22 @@ func TestEchoWithMessaging(t *testing.T) {
 	listenerDone := make(chan bool)
 	clientDone := make(chan bool)
 	go func() {
+		defer close(listenerDone)
 		// server echo
 		conn, err := l.Accept()
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		defer conn.Close()
 
 		time.Sleep(500 * time.Millisecond) // make *sure* we don't begin to read before eof signal is sent
 		_, err = io.Copy(conn, conn)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		conn.(CloseWriter).CloseWrite()
-		close(listenerDone)
 	}()
 	client, err := namedpipe.DialTimeout(pipePath, time.Second)
 	if err != nil {
@@ -529,16 +538,18 @@ func TestEchoWithMessaging(t *testing.T) {
 	defer client.Close()
 
 	go func() {
+		defer close(clientDone)
 		// client read back
 		bytes := make([]byte, 2)
 		n, e := client.Read(bytes)
 		if e != nil {
-			t.Fatal(e)
+			t.Error(e)
+			return
 		}
 		if n != 2 || bytes[0] != 0 || bytes[1] != 1 {
-			t.Fatalf("expected 2 bytes, got %v", n)
+			t.Errorf("expected 2 bytes, got %v", n)
+			return
 		}
-		close(clientDone)
 	}()
 
 	payload := make([]byte, 2)
@@ -572,7 +583,8 @@ func TestConnectRace(t *testing.T) {
 			}
 
 			if err != nil {
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 			s.Close()
 		}
@@ -607,11 +619,13 @@ func TestMessageReadMode(t *testing.T) {
 		defer wg.Done()
 		s, err := l.Accept()
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		_, err = s.Write(msg)
 		if err != nil {
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		s.Close()
 	}()

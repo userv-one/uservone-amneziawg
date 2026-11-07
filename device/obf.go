@@ -3,8 +3,11 @@ package device
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
+
+const maxObfPacketSize = 65507 // largest payload in a UDP datagram
 
 type obfBuilder func(val string) (obf, error)
 
@@ -31,26 +34,39 @@ type obfChain struct {
 	obfs []obf
 }
 
+func parseObfLength(val string, min, max int) (int, error) {
+	length, err := strconv.Atoi(val)
+	if err != nil {
+		return 0, err
+	}
+	if length < min || length > max {
+		return 0, fmt.Errorf("length must be between %d and %d", min, max)
+	}
+	return length, nil
+}
+
 func newObfChain(spec string) (*obfChain, error) {
 	var (
-		obfs []obf
-		errs []error
+		obfs          []obf
+		errs          []error
+		payloadFields int
+		totalLen      int
 	)
 
-	remaining := spec[:]
-	for {
-		start := strings.IndexByte(remaining, '<')
-		if start == -1 {
+	remaining := spec
+	for remaining != "" {
+		if remaining[0] != '<' {
+			errs = append(errs, fmt.Errorf("unexpected text near %q", remaining))
 			break
 		}
 
-		end := strings.IndexByte(remaining[start:], '>')
+		end := strings.IndexByte(remaining, '>')
 		if end == -1 {
-			return nil, errors.New("missing enclosing >")
+			errs = append(errs, errors.New("missing enclosing >"))
+			break
 		}
-		end += start
 
-		tag := remaining[start+1 : end]
+		tag := remaining[1:end]
 		parts := strings.Fields(tag)
 		if len(parts) == 0 {
 			errs = append(errs, errors.New("empty tag"))
@@ -66,6 +82,17 @@ func newObfChain(spec string) (*obfChain, error) {
 			continue
 		}
 
+		expectedParts := 1
+		switch key {
+		case "b", "r", "rc", "rd", "dz":
+			expectedParts = 2
+		}
+		if len(parts) != expectedParts {
+			errs = append(errs, fmt.Errorf("tag <%s> has wrong number of arguments", key))
+			remaining = remaining[end+1:]
+			continue
+		}
+
 		val := ""
 		if len(parts) > 1 {
 			val = parts[1]
@@ -77,7 +104,21 @@ func newObfChain(spec string) (*obfChain, error) {
 			remaining = remaining[end+1:]
 			continue
 		}
-
+		if key == "d" || key == "ds" {
+			payloadFields++
+			if payloadFields > 1 {
+				errs = append(errs, errors.New("only one data-bearing tag is allowed"))
+				remaining = remaining[end+1:]
+				continue
+			}
+		}
+		obfLen := o.ObfuscatedLen(0)
+		if obfLen < 0 || totalLen > maxObfPacketSize-obfLen {
+			errs = append(errs, fmt.Errorf("obfuscated packet exceeds %d bytes", maxObfPacketSize))
+			remaining = remaining[end+1:]
+			continue
+		}
+		totalLen += obfLen
 		obfs = append(obfs, o)
 		remaining = remaining[end+1:]
 	}
@@ -106,12 +147,18 @@ func (c *obfChain) Obfuscate(dst, src []byte) {
 
 func (c *obfChain) Deobfuscate(dst, src []byte) bool {
 	dynamicLen := len(src) - c.ObfuscatedLen(0)
+	if dynamicLen < 0 {
+		return false
+	}
 
 	written, read := 0, 0
 
 	for _, o := range c.obfs {
 		deobfLen := o.DeobfuscatedLen(dynamicLen)
 		obfLen := o.ObfuscatedLen(deobfLen)
+		if deobfLen < 0 || obfLen < 0 || deobfLen > len(dst)-written || obfLen > len(src)-read {
+			return false
+		}
 
 		if !o.Deobfuscate(dst[written:written+deobfLen], src[read:read+obfLen]) {
 			return false
@@ -121,7 +168,7 @@ func (c *obfChain) Deobfuscate(dst, src []byte) bool {
 		read += obfLen
 	}
 
-	return true
+	return read == len(src) && written == len(dst)
 }
 
 func (c *obfChain) ObfuscatedLen(n int) int {
