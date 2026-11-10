@@ -156,7 +156,7 @@ func (device *Device) IpcGetOperation(w io.Writer) error {
 			sendf("h4=%s", header.ToString())
 		}
 
-		for i, ipacket := range device.ipackets {
+		for i, ipacket := range device.snapshotIPackets() {
 			if ipacket != nil {
 				sendf("i%d=%s", i+1, ipacket.Spec)
 			}
@@ -440,35 +440,35 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse I1: %w", err)
 		}
-		device.ipackets[0] = chain
+		ipcDev.ipackets[0] = chain
 
 	case "i2":
 		chain, err := newObfChain(value)
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse I2: %w", err)
 		}
-		device.ipackets[1] = chain
+		ipcDev.ipackets[1] = chain
 
 	case "i3":
 		chain, err := newObfChain(value)
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse I3: %w", err)
 		}
-		device.ipackets[2] = chain
+		ipcDev.ipackets[2] = chain
 
 	case "i4":
 		chain, err := newObfChain(value)
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse I4: %w", err)
 		}
-		device.ipackets[3] = chain
+		ipcDev.ipackets[3] = chain
 
 	case "i5":
 		chain, err := newObfChain(value)
 		if err != nil {
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse I5: %w", err)
 		}
-		device.ipackets[4] = chain
+		ipcDev.ipackets[4] = chain
 
 	case "header_protection_key":
 		var key HeaderCipherKey
@@ -485,7 +485,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 		}
 
 		device.log.Verbosef("UAPI: Updating content padding addition")
-		device.contentPaddingAddition.Store(rang)
+		ipcDev.contentPadding = rang
 
 	case "rekey_after_time":
 		var rang UintRange
@@ -493,7 +493,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse rekey after time: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating rekey after time")
-		device.timings.rekeyAfterTimeSec.Store(rang)
+		ipcDev.timings.rekeyAfterTimeSec = rang
 
 	case "rekey_timeout":
 		var rang UintRange
@@ -501,7 +501,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse rekey timeout: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating rekey timeout")
-		device.timings.rekeyTimeoutSec.Store(rang)
+		ipcDev.timings.rekeyTimeoutSec = rang
 
 	case "reject_after_time":
 		var rang UintRange
@@ -509,7 +509,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse reject after time: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating reject after time")
-		device.timings.rejectAfterTimeSec.Store(rang)
+		ipcDev.timings.rejectAfterTimeSec = rang
 
 	case "keepalive_timeout":
 		var rang UintRange
@@ -517,7 +517,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse keepalive timeout: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating keepalive timeout")
-		device.timings.keepaliveTimeoutSec.Store(rang)
+		ipcDev.timings.keepaliveTimeoutSec = rang
 
 	case "max_handshake_attempts":
 		var rang UintRange
@@ -525,7 +525,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse max handshake attempts: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating max handshake attempts")
-		device.timings.maxHandshakeAttemps.Store(rang)
+		ipcDev.timings.maxHandshakeAttemps = rang
 
 	case "random_trailers":
 		val, err := strconv.ParseBool(value)
@@ -533,7 +533,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse random trailers: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating random trailers")
-		device.randomTrailers.Store(val)
+		ipcDev.randomTrailers = val
 
 	case "disable_cookies":
 		val, err := strconv.ParseBool(value)
@@ -541,7 +541,7 @@ func (device *Device) handleDeviceLine(ipcDev *ipcSetDevice, key, value string) 
 			return ipcErrorf(ipc.IpcErrorInvalid, "failed to parse disable cookies: %w", err)
 		}
 		device.log.Verbosef("UAPI: Updating disable cookies")
-		device.disableCookies.Store(val)
+		ipcDev.disableCookies = val
 
 	default:
 		return ipcErrorf(ipc.IpcErrorInvalid, "invalid UAPI device key: %v", key)
@@ -807,6 +807,17 @@ type ipcSetDevice struct {
 		transport uint32
 	}
 	headerProtectionKey HeaderCipherKey
+	ipackets            [5]*obfChain
+	contentPadding      UintRange
+	timings             struct {
+		rekeyAfterTimeSec   UintRange
+		rekeyTimeoutSec     UintRange
+		rejectAfterTimeSec  UintRange
+		keepaliveTimeoutSec UintRange
+		maxHandshakeAttemps UintRange
+	}
+	randomTrailers bool
+	disableCookies bool
 }
 
 func (d *ipcSetDevice) fromDevice(device *Device) {
@@ -828,6 +839,15 @@ func (d *ipcSetDevice) fromDevice(device *Device) {
 	d.paddings.transport = device.paddings.transport.Load()
 
 	d.headerProtectionKey = device.headerProtection.key
+	d.ipackets = device.snapshotIPackets()
+	d.contentPadding = device.contentPaddingAddition.Load()
+	d.timings.rekeyAfterTimeSec = device.timings.rekeyAfterTimeSec.Load()
+	d.timings.rekeyTimeoutSec = device.timings.rekeyTimeoutSec.Load()
+	d.timings.rejectAfterTimeSec = device.timings.rejectAfterTimeSec.Load()
+	d.timings.keepaliveTimeoutSec = device.timings.keepaliveTimeoutSec.Load()
+	d.timings.maxHandshakeAttemps = device.timings.maxHandshakeAttemps.Load()
+	d.randomTrailers = device.randomTrailers.Load()
+	d.disableCookies = device.disableCookies.Load()
 }
 
 func (d *ipcSetDevice) mergeWithDevice(device *Device) error {
@@ -868,6 +888,16 @@ func (d *ipcSetDevice) mergeWithDevice(device *Device) error {
 
 	device.log.Verbosef("UAPI: Updating header protection key")
 	device.headerProtection.key = d.headerProtectionKey
+
+	device.setIPackets(d.ipackets)
+	device.contentPaddingAddition.Store(d.contentPadding)
+	device.timings.rekeyAfterTimeSec.Store(d.timings.rekeyAfterTimeSec)
+	device.timings.rekeyTimeoutSec.Store(d.timings.rekeyTimeoutSec)
+	device.timings.rejectAfterTimeSec.Store(d.timings.rejectAfterTimeSec)
+	device.timings.keepaliveTimeoutSec.Store(d.timings.keepaliveTimeoutSec)
+	device.timings.maxHandshakeAttemps.Store(d.timings.maxHandshakeAttemps)
+	device.randomTrailers.Store(d.randomTrailers)
+	device.disableCookies.Store(d.disableCookies)
 
 	return nil
 }

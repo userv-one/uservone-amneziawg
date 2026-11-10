@@ -3,10 +3,13 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download && go mod verify
 COPY . .
-RUN CGO_ENABLED=1 go build -trimpath \
-    -ldflags '-linkmode external -extldflags "-fno-PIC -static"' \
+ARG VERSION=0.1.0
+ARG COMMIT=dev
+RUN RELEASE_VERSION="${VERSION#v}" && \
+    LDFLAGS="-s -w -X github.com/userv-one/uservone-amneziawg/v3/buildinfo.Version=${RELEASE_VERSION} -X github.com/userv-one/uservone-amneziawg/v3/buildinfo.Commit=${COMMIT}" && \
+    CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
     -o /usr/bin/uservone-amneziawg . && \
-    CGO_ENABLED=0 go build -trimpath \
+    CGO_ENABLED=0 go build -trimpath -ldflags "$LDFLAGS" \
     -o /usr/bin/uservone-awg ./cmd/uservone-awg
 
 FROM alpine:3.22 AS tools

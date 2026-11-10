@@ -136,7 +136,7 @@ func (peer *Peer) SendHandshakeInitiation(isRetry bool) error {
 
 	var sendBuffer [][]byte
 
-	for _, ipacket := range peer.device.ipackets {
+	for _, ipacket := range peer.device.snapshotIPackets() {
 		if ipacket != nil {
 			buf := make([]byte, ipacket.ObfuscatedLen(0))
 			ipacket.Obfuscate(buf, nil)

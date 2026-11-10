@@ -110,7 +110,8 @@ type Device struct {
 		transport atomic.Uint32
 	}
 
-	ipackets [5]*obfChain
+	ipackets   [5]*obfChain
+	ipacketsMu sync.RWMutex
 
 	headerProtection struct {
 		sync.RWMutex
@@ -388,6 +389,18 @@ func (device *Device) BatchSize() int {
 		size = dSize
 	}
 	return size
+}
+
+func (device *Device) snapshotIPackets() [5]*obfChain {
+	device.ipacketsMu.RLock()
+	defer device.ipacketsMu.RUnlock()
+	return device.ipackets
+}
+
+func (device *Device) setIPackets(ipackets [5]*obfChain) {
+	device.ipacketsMu.Lock()
+	defer device.ipacketsMu.Unlock()
+	device.ipackets = ipackets
 }
 
 func (device *Device) LookupPeer(pk NoisePublicKey) *Peer {

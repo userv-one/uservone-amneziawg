@@ -14,7 +14,7 @@ Upstream reference: [`amnezia-vpn/amneziawg-go@b5928efb`](https://github.com/amn
 - Adds deterministic `balanced` and `low-bandwidth` profiles with bounded padding, non-overlapping headers and cookies enabled.
 - Provides a small management CLI, cross-platform CI, race tests and obfuscation fuzzing.
 
-The complete technical list is in [IMPROVEMENTS.md](docs/IMPROVEMENTS.md).
+The complete technical list is in [IMPROVEMENTS.md](docs/IMPROVEMENTS.md), pilot rollout in [MIGRATION.md](docs/MIGRATION.md), and release verification in [RELEASE.md](docs/RELEASE.md).
 
 ## Build
 
@@ -67,7 +67,16 @@ Copy the resulting `header_protection_key` line to the server profile as well. D
 uservone-awg profile --client low-bandwidth
 ```
 
-These profiles change obfuscation parameters, not cryptography or the AWG wire format. They do not provide immunity from DPI, endpoint blocking, active probing or traffic analysis.
+These profiles contain only shared UAPI settings. They never emit private keys, preshared keys, peer public keys, endpoints, AllowedIPs or INI sections. They change obfuscation parameters, not cryptography or the AWG wire format. They do not provide immunity from DPI, endpoint blocking, active probing or traffic analysis.
+
+## Configuration diagnostics
+
+```sh
+uservone-awg version-json
+uservone-awg check-config /etc/amneziawg/awg0.conf
+```
+
+`check-config` parses the `awg-quick` INI format without applying it, creating TUN devices or printing key material. It shares the runtime `AWGParameters` checks for bounded numeric and obfuscation settings; `HeaderProtectionKey` accepts both awg-quick base64 and UAPI hex. Atomic UAPI candidate application—not the preflight—prevents `awg syncconf` from leaving partially applied AWG obfuscation.
 
 ## Daemon
 
@@ -93,6 +102,7 @@ The daemon remains compatible with existing `/etc/amneziawg/*.conf` files and `u
 go test ./...
 go vet -unsafeptr=false ./... # Windows RIO uses uintptr by design
 go test -race ./...
+go test ./device -run 'TestTwoDevicePing|TestAWGDevicePing|TestAWGReconfigurationPingPong|TestPeerAddRevokeAndExpiry' -count=3
 go test ./device -run '^$' -fuzz FuzzObfChainDeobfuscationNeverPanics -fuzztime 15s
 ```
 

@@ -122,6 +122,60 @@ func TestUintRangePickOneSupportsFullUint32Range(t *testing.T) {
 	}
 }
 
+func TestRejectedSyncconfDoesNotPartiallyApplyObfuscation(t *testing.T) {
+	t.Parallel()
+
+	device := newAWGValidationTestDevice()
+	initial := "s4=32\ni1=<b 0x01>\ncontent_padding_addition=16-32\nrandom_trailers=false\ndisable_cookies=false\n"
+	if err := device.IpcSet(initial); err != nil {
+		t.Fatal(err)
+	}
+
+	rejected := "i1=<b 0xdead>\ncontent_padding_addition=32-64\nrekey_timeout=7-9\nrandom_trailers=true\ndisable_cookies=true\ns4=65535\n"
+	if err := device.IpcSet(rejected); err == nil {
+		t.Fatal("invalid syncconf update unexpectedly succeeded")
+	}
+	state, err := device.IpcGet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"i1=<b 0x01>\n",
+		"content_padding_addition=16-32\n",
+		"random_trailers=0\n",
+		"disable_cookies=0\n",
+		"s4=32\n",
+	} {
+		if !strings.Contains(state, expected) {
+			t.Errorf("rejected update changed state; missing %q in:\n%s", expected, state)
+		}
+	}
+	for _, unexpected := range []string{"i1=<b 0xdead>", "content_padding_addition=32-64", "rekey_timeout=", "random_trailers=1", "disable_cookies=1"} {
+		if strings.Contains(state, unexpected) {
+			t.Errorf("rejected update leaked %q into device state", unexpected)
+		}
+	}
+}
+
+func TestSyncconfParseErrorDoesNotApplyEarlierSignature(t *testing.T) {
+	t.Parallel()
+
+	device := newAWGValidationTestDevice()
+	if err := device.IpcSet("i1=<b 0x01>\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := device.IpcSet("i1=<b 0xdead>\ni2=<r -1>\n"); err == nil {
+		t.Fatal("invalid signature chain unexpectedly succeeded")
+	}
+	state, err := device.IpcGet()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(state, "i1=<b 0x01>\n") || strings.Contains(state, "i1=<b 0xdead>") {
+		t.Fatalf("earlier I1 line was applied despite later parse error:\n%s", state)
+	}
+}
+
 func TestPaddingLimitErrorNamesMessage(t *testing.T) {
 	t.Parallel()
 

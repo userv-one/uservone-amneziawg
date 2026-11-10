@@ -20,7 +20,8 @@
 ## Customization and operations
 
 - The `profile` package exposes validated `Balanced()` and `LowBandwidth()` presets plus fresh 256-bit header-protection key generation.
-- `uservone-awg` renders client/server UAPI without embedding private keys or peer credentials.
+- `uservone-awg` renders client/server UAPI without embedding private keys or peer credentials, and `check-config` validates `awg-quick` INI files without applying them.
+- Release binaries are static `CGO_ENABLED=0` builds; hostname resolution therefore uses Go's pure resolver. Pilot nodes with unusual nsswitch/mDNS requirements must validate endpoint resolution before rollout.
 - The module path, daemon name, build metadata and container labels identify userv.one without hiding upstream provenance.
 - CI covers formatting, tests, vet, builds, race detection and fuzz smoke tests on Linux, Windows and macOS.
 

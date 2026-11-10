@@ -105,6 +105,37 @@ func TestProfileRejectsUnsafeValues(t *testing.T) {
 	}
 }
 
+func TestProfilesOnlyEmitUAPISettings(t *testing.T) {
+	t.Parallel()
+
+	for name, makeProfile := range map[string]func() profile.Profile{
+		"balanced":      profile.Balanced,
+		"low-bandwidth": profile.LowBandwidth,
+	} {
+		for _, client := range []bool{false, true} {
+			config := makeProfile()
+			config.HeaderProtectionKey = strings.Repeat("11", 32)
+			output, err := config.UAPI(client)
+			if err != nil {
+				t.Fatalf("%s client=%v: %v", name, client, err)
+			}
+			for _, forbidden := range []string{
+				"private_key", "preshared_key", "public_key", "endpoint", "allowed_ip", "Address", "Peer", "[Interface]",
+			} {
+				if strings.Contains(output, forbidden) {
+					t.Errorf("%s client=%v output contains forbidden %q", name, client, forbidden)
+				}
+			}
+			for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
+				key, value, found := strings.Cut(line, "=")
+				if !found || key == "" || value == "" {
+					t.Errorf("%s client=%v has non-UAPI line %q", name, client, line)
+				}
+			}
+		}
+	}
+}
+
 func TestProfilesAreAcceptedByProtocolCore(t *testing.T) {
 	for _, config := range []profile.Profile{profile.Balanced(), profile.LowBandwidth()} {
 		uapi, err := config.UAPI(true)

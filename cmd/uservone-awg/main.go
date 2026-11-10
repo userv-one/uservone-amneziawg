@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 
+	"github.com/userv-one/uservone-amneziawg/v3/awgconf"
 	"github.com/userv-one/uservone-amneziawg/v3/buildinfo"
 	"github.com/userv-one/uservone-amneziawg/v3/profile"
 )
@@ -13,6 +16,8 @@ import (
 func usage(writer io.Writer) {
 	fmt.Fprintln(writer, "Usage: uservone-awg profile [--client] [--header-protection] balanced|low-bandwidth")
 	fmt.Fprintln(writer, "       uservone-awg version")
+	fmt.Fprintln(writer, "       uservone-awg version-json")
+	fmt.Fprintln(writer, "       uservone-awg check-config /etc/amneziawg/awg0.conf")
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
@@ -23,6 +28,28 @@ func run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "version":
 		fmt.Fprintf(stdout, "%s %s\nupstream amneziawg-go %s\n", buildinfo.Product, buildinfo.Version, buildinfo.UpstreamCommit)
+		return 0
+	case "version-json":
+		info := map[string]string{
+			"product": buildinfo.Product, "version": buildinfo.Version,
+			"commit": buildinfo.Commit, "upstream_commit": buildinfo.UpstreamCommit,
+			"go_version": runtime.Version(), "os": runtime.GOOS, "arch": runtime.GOARCH,
+		}
+		if err := json.NewEncoder(stdout).Encode(info); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		return 0
+	case "check-config":
+		if len(args) != 2 {
+			usage(stderr)
+			return 2
+		}
+		if err := awgconf.ValidateFile(args[1]); err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		fmt.Fprintln(stdout, "valid")
 		return 0
 	case "profile":
 		flags := flag.NewFlagSet("profile", flag.ContinueOnError)

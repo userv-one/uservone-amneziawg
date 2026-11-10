@@ -32,6 +32,8 @@ jobs:
         run: go test ./...
       - name: Vet
         run: go vet -unsafeptr=false ./...
+      - name: Tunnel loopback
+        run: go test ./device -run 'TestTwoDevicePing|TestAWGDevicePing|TestAWGReconfigurationPingPong|TestPeerAddRevokeAndExpiry' -count=3
       - name: Build management CLI
         run: go build ./cmd/uservone-awg
 
